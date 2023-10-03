@@ -22,6 +22,8 @@ const config = {
 	AUTH_ENABLED: Boolean(process.env.USER_LOGIN && process.env.USER_PASSWORD),
 	HOME_PAGE: PROXY_PATH || '/',
 	LOGIN_PAGE: `${PROXY_PATH}/login`,
+
+	REJECT_UNAUTHORIZED: process.env.REJECT_UNAUTHORIZED || "false",
 };
 
 module.exports = config;

@@ -14,22 +14,27 @@ const bodyParser = require('body-parser');
 const {authRouter} = require('./login');
 const config = require('./config');
 
-const redisConfig = {
-	redis: {
-		port: config.REDIS_PORT,
-		host: config.REDIS_HOST,
-		db: config.REDIS_DB,
-		...(config.REDIS_PASSWORD && {password: config.REDIS_PASSWORD}),
-		tls: config.REDIS_USE_TLS === 'true',
-	},
-};
+(async () => {
+	const redisConfig = {
+		redis: {
+			// socket: {
+			// 	port: config.REDIS_PORT,
+			// 	host: config.REDIS_HOST,
+			// 	tls: config.REDIS_USE_TLS === 'true',
+			// 	rejectUnauthorized: config.REJECT_UNAUTHORIZED === "true",
+			// },
+			// database: config.REDIS_DB,
+			// ...(config.REDIS_PASSWORD && {password: config.REDIS_PASSWORD}),
+			url: process.env.URL
+		},
+	};
 
-const serverAdapter = new ExpressAdapter();
-const client = redis.createClient(redisConfig.redis);
-const {setQueues} = createBullBoard({queues: [], serverAdapter});
-const router = serverAdapter.getRouter();
+	const serverAdapter = new ExpressAdapter();
+	const client = await redis.createClient(redisConfig.redis).connect();
+	const {setQueues} = createBullBoard({queues: [], serverAdapter});
+	const router = serverAdapter.getRouter();
 
-client.KEYS(`${config.BULL_PREFIX}:*`, (err, keys) => {
+	const keys = await client.sendCommand(["KEYS", `${config.BULL_PREFIX}:*`]);	
 	const uniqKeys = new Set(keys.map(key => key.replace(/^.+?:(.+?):.+?$/, '$1')));
 	const queueList = Array.from(uniqKeys).sort().map(
 		(item) => {
@@ -47,51 +52,51 @@ client.KEYS(`${config.BULL_PREFIX}:*`, (err, keys) => {
 
 	setQueues(queueList);
 	console.log('done!')
-});
 
-const app = express();
+	const app = express();
 
-app.set('views', __dirname + '/views');
-app.set('view engine', 'ejs');
+	app.set('views', __dirname + '/views');
+	app.set('view engine', 'ejs');
 
-if (app.get('env') !== 'production') {
-	const morgan = require('morgan');
-	app.use(morgan('combined'));
-}
-
-app.use((req, res, next) => {
-	if (config.PROXY_PATH) {
-		req.proxyUrl = config.PROXY_PATH;
+	if (app.get('env') !== 'production') {
+		const morgan = require('morgan');
+		app.use(morgan('combined'));
 	}
 
-	next();
-});
+	app.use((req, res, next) => {
+		if (config.PROXY_PATH) {
+			req.proxyUrl = config.PROXY_PATH;
+		}
 
-const sessionOpts = {
-	name: 'bull-board.sid',
-	secret: Math.random().toString(),
-	resave: false,
-	saveUninitialized: false,
-	cookie: {
-		path: '/',
-		httpOnly: false,
-		secure: false
+		next();
+	});
+
+	const sessionOpts = {
+		name: 'bull-board.sid',
+		secret: Math.random().toString(),
+		resave: false,
+		saveUninitialized: false,
+		cookie: {
+			path: '/',
+			httpOnly: false,
+			secure: false
+		}
+	};
+
+	app.use(session(sessionOpts));
+	app.use(passport.initialize({}));
+	app.use(passport.session({}));
+	app.use(bodyParser.urlencoded({extended: false}));
+
+	if (config.AUTH_ENABLED) {
+		app.use(config.LOGIN_PAGE, authRouter);
+		app.use(config.HOME_PAGE, ensureLoggedIn(config.LOGIN_PAGE), router);
+	} else {
+		app.use(config.HOME_PAGE, router);
 	}
-};
 
-app.use(session(sessionOpts));
-app.use(passport.initialize({}));
-app.use(passport.session({}));
-app.use(bodyParser.urlencoded({extended: false}));
-
-if (config.AUTH_ENABLED) {
-	app.use(config.LOGIN_PAGE, authRouter);
-	app.use(config.HOME_PAGE, ensureLoggedIn(config.LOGIN_PAGE), router);
-} else {
-	app.use(config.HOME_PAGE, router);
-}
-
-app.listen(config.PORT, () => {
-	console.log(`bull-board is started http://localhost:${config.PORT}${config.HOME_PAGE}`);
-	console.log(`bull-board is fetching queue list, please wait...`);
-});
+	app.listen(config.PORT, () => {
+		console.log(`bull-board is started http://localhost:${config.PORT}${config.HOME_PAGE}`);
+		console.log(`bull-board is fetching queue list, please wait...`);
+	});
+})();

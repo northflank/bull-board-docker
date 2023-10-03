@@ -1,4 +1,6 @@
-FROM node:16.13-alpine
+FROM node:20
+
+RUN apt update && apt install -y ca-certificates
 
 WORKDIR /usr/app
 
