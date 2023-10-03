@@ -17,12 +17,14 @@ const config = require('./config');
 (async () => {
 	const redisConfig = {
 		redis: {
-			// socket: {
-			// 	port: config.REDIS_PORT,
-			// 	host: config.REDIS_HOST,
-			// 	tls: config.REDIS_USE_TLS === 'true',
-			// 	rejectUnauthorized: config.REJECT_UNAUTHORIZED === "true",
-			// },
+			socket: {
+				// port: config.REDIS_PORT,
+				// host: config.REDIS_HOST,
+				// tls: config.REDIS_USE_TLS === 'true',
+				rejectUnauthorized: config.REJECT_UNAUTHORIZED === "false",
+				servername: process.env.REDIS_HOST,
+				tls: process.env.TLS === "true",
+			},
 			// database: config.REDIS_DB,
 			// ...(config.REDIS_PASSWORD && {password: config.REDIS_PASSWORD}),
 			url: process.env.URL
